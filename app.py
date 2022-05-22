@@ -8,6 +8,7 @@ import configparser as ConfigParser
 import random
 import math
 import serial
+import numpy as np
 
 async_mode = None
 
@@ -23,45 +24,48 @@ app = Flask(__name__)
 # print(myhost)
 
 
-# app.config['SECRET_KEY'] = 'secret!'
-# socketio = SocketIO(app, async_mode=async_mode)
-# thread = None
-# thread_lock = Lock() 
-print("WORKING NOW")
+app.config['SECRET_KEY'] = 'secret!'
+socketio = SocketIO(app, async_mode=async_mode)
+thread = None
+thread_lock = Lock() 
+
 #Serial comunnication
 ser = serial.Serial("/dev/ttyS0")
 
 ser.baudrate = 9600
-read_ser = ser.readline()
-
-while read_ser:
-    read_ser = ser.readline()
-    print(read_ser.decode())
-
-# def background_thread(args):
-#     dataList = []  
-#     db = MySQLdb.connect(host=myhost,user=myuser,passwd=mypasswd,db=mydb)          
-#     while True:
-#         if args:
-#           A = dict(args).get('A')
-#           dbV = dict(args).get('db_value')
-#         else:
-#           A = 1
-#           dbV = 'nieco'  
-#         #print A
-#         print(dbV) 
-#         print(args)  
-#         socketio.sleep(2)
+    
+def background_thread(args):
+    dataList = []  
+    #db = MySQLdb.connect(host=myhost,user=myuser,passwd=mypasswd,db=mydb)          
+    while True:
+        read_ser = ser.readline()
+        if args:
+            temperature = dict(args).get('Temperature')
+            luminosity = dict(args).get('Luminosity')
+            humidity = dict(args).get('Humidity')
+            dbV = dict(args).get('db_value')
+        else:
+            temperature = 1
+            luminosity = 1
+            humidity = 1
+            dbV = 'nieco' 
+        readSerialData = read_ser.decode()
+        splitDataArr = readSerialData.split(",")
+        lastElement = splitDataArr[2].replace("\r\n","")
+        finalArr = np.array([splitDataArr[0],splitDataArr[1],lastElement])
+        floatFinalArr = finalArr.astype(np.float)
+        print(floatFinalArr)
+        socketio.sleep(1.5)
 #         if dbV == 'start':
-#           dataDict = {
-#             "t": time.time(),
-#             "x": dataCounter,
-#             "y": float(A)*premSin,
-#             "yCos": float(A)*premCos
-#           }
-#           dataList.append(dataDict)
+#             dataDict = {
+#             "Time": time.time(),
+#             "Temperature": splitDataArr[0],
+#             "Luminosity": splitDataArr[1],
+#             "Humidity of Soil": splitDataArr[2]
+#             }
+#             dataList.append(dataDict)
 #         else:
-#           if len(dataList)>0:
+#             if len(dataList)>0:
 #             print(str(dataList))
 #             fuj = str(dataList).replace("'", "\"")
 #             print(fuj)
@@ -70,20 +74,17 @@ while read_ser:
 #             maxid = cursor.fetchone()
 #             cursor.execute("INSERT INTO graph (id, hodnoty) VALUES (%s, %s)", (maxid[0] + 1, fuj))
 #             db.commit()
-#           dataList = []
-#           dataCounter = 0
-#         socketio.emit('my_response',
-#                       {'data': float(A)*premSin,"data2": float(A)*premCos, 'count': count},
-#                       namespace='/test')  
+#             dataList = []
+#             dataCounter = 0
+        if dbV == "start":
+            socketio.emit('my_response',
+                        {'Temperature': floatFinalArr[0],"Luminosity": floatFinalArr[1], 'Humidity': floatFinalArr[2]},
+                        namespace='/test')
 #     db.close()
-# 
-# @app.route('/')
-# def index():
-#     return render_template('index.html', async_mode=socketio.async_mode)
-# 
-# @app.route('/graph', methods=['GET', 'POST'])
-# def graph():
-#     return render_template('graph.html', async_mode=socketio.async_mode)
+
+@app.route('/',methods=['GET', 'POST'])
+def tabs():
+    return render_template('tabs.html',async_mode=socketio.async_mode)
 #     
 # @app.route('/db')
 # def db():
@@ -101,41 +102,32 @@ while read_ser:
 #   cursor.execute("SELECT hodnoty FROM  graph WHERE id=%s", num)
 #   rv = cursor.fetchone()
 #   return str(rv[0])
-#     
-# @socketio.on('my_event', namespace='/test')
-# def test_message(message):   
-#     session['receive_count'] = session.get('receive_count', 0) + 1 
-#     session['A'] = message['value']    
-#     emit('my_response',
-#          {'data': message['value'], 'count': session['receive_count']})
+    
+@socketio.on('my_event', namespace='/test')
+def test_message(message):   
+    session['Temperature'] = message['temp_value']
+    session['Luminosity'] = message['lum_value']
+    session['Humidity'] = message['hum_value']
+    print(session['Humidity'])
+    emit('my_response',
+         {'Temperature': session['Temperature'], 'Luminosity': session['Luminosity'],'Humidity': session['Humidity']})
 # 
-# @socketio.on('db_event', namespace='/test')
-# def db_message(message):   
-# #    session['receive_count'] = session.get('receive_count', 0) + 1 
-#     session['db_value'] = message['value']    
-# #    emit('my_response',
-# #         {'data': message['value'], 'count': session['receive_count']})
+@socketio.on('db_event', namespace='/test')
+def db_message(message):   
+    session['db_value'] = message['value']    
 # 
-# @socketio.on('disconnect_request', namespace='/test')
-# def disconnect_request():
-#     session['receive_count'] = session.get('receive_count', 0) + 1
-#     emit('my_response',
-#          {'data': 'Disconnected!', 'count': session['receive_count']})
-#     disconnect()
-# 
-# @socketio.on('connect', namespace='/test')
-# def test_connect():
-#     global thread
-#     with thread_lock:
-#         if thread is None:
-#             thread = socketio.start_background_task(target=background_thread, args=session._get_current_object())
-#    # emit('my_response', {'data': 'Connected', 'count': 0})
-# 
-# 
-# @socketio.on('disconnect', namespace='/test')
-# def test_disconnect():
-#     print('Client disconnected', request.sid)
-# 
-# 
-# if __name__ == '__main__':
-#     socketio.run(app, host="0.0.0.0", port=80, debug=True)
+@socketio.on('disconnect_request', namespace='/test')
+def disconnect_request():
+    emit('my_response',
+         {'Temperature': 'Disconnected!'})
+    disconnect()
+
+@socketio.on('connect', namespace='/test')
+def test_connect():
+    global thread
+    with thread_lock:
+        if thread is None:
+            thread = socketio.start_background_task(target=background_thread, args=session._get_current_object())
+
+if __name__ == '__main__':
+    socketio.run(app, host="0.0.0.0", port=80, debug=True)

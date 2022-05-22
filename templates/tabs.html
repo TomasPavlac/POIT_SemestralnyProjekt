@@ -1,0 +1,104 @@
+<!doctype html>                                   
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>jQuery UI Tabs - Open on mouseover</title>
+    <link rel="stylesheet" href="static/jquery-ui.min.css">
+    <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/socket.io/3.0.5/socket.io.min.js"></script>
+    <script src="static/libs/gauge.min.js"></script>
+    <script src="static/libs/plotly-latest.min.js"></script>
+    <script src="static/jquery-3.2.1.min.js"></script>
+    <script src="static/jquery-ui.min.js"></script>
+    <script>
+    $(document).ready(function() {
+      namespace = '/test';
+      var socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port + namespace);
+  
+      socket.on('my_response', function(msg) {
+        if (msg.Temperature != "Disconnected!"){
+          $('#log').append('Temperature: '+msg.Temperature+'°C'+' Luminosity: '+msg.Luminosity+'lumen'+' Humidity of Soil: '+msg.Humidity+'%'+'<br>').html();
+        }else{
+          $('#log').append('Disconnected!')
+        }  
+      });
+      
+      $('form#emit').submit(function(event) {
+          socket.emit('my_event', {
+              temp_value: $('#emit_temp').val() == undefined ? $('#emit_temp').val() = 0 : $('#emit_temp').val(),
+              lum_value: $('#emit_lum').val(),
+              hum_value: $('#emit_hum').val() 
+          });
+          return false; 
+      });
+      
+      $('#buttonVal').click(function(event) {
+          socket.emit('db_event', {value: $('#buttonVal').val()});
+          if ($(this).val() == "start") {
+            $(this).val("stop");
+            $(this).text("Stop");
+          }
+          else {
+            $(this).val("start");
+            $(this).text("Start");
+          }
+          return false; 
+        }); 
+      
+      $('form#disconnect').submit(function(event) {
+          socket.emit('disconnect_request');
+          return false; 
+     });         
+       
+      $(function() {
+        $("#tabs").tabs({
+          event: "mouseover"
+        });
+      });  
+     });
+  
+    </script>
+  </head>
+  <body>
+    <div id="tabs">
+      <ul>
+        <li><a href="#tabs-1">Hodnoty</a></li>
+        <li><a href="#tabs-2">Cifernik</a></li>
+        <li><a href="#tabs-3">Graf</a></li>
+      </ul>
+      
+      <div id="tabs-1">
+        <h1>Values from sensors</h1>
+        <form id="emit" method="POST" action='#'>
+          <input type="text" name="emit_temp" id="emit_temp" placeholder="Temperature [°C]">
+          <input type="text" name="emit_lum" id="emit_lum" placeholder="Luminosity [lumen]">
+          <input type="text" name="emit_hum" id="emit_hum" placeholder="Humidity of Soil [%]">
+          <input type="submit" value="Set Values">
+        </form>
+        <button id="buttonVal" type="submit" value="start">Start</button>
+        <form id="disconnect" method="POST" action="#">
+          <input type="submit" value="Disconnect">
+        </form> 
+        <h2>Receive:</h2>
+        <div id="log"></div>
+      </div>
+      
+      <div id="tabs-2">
+          <h1>Cifernik</h1>
+          <form id="disconnected" method="POST" action="#">
+            <input type="submit" value="Disconnect">
+          </form> 
+            <canvas id="canvasID"></canvas>
+            <h2>Receive:</h2>
+          <div id="logs"></div>
+      </div>
+      
+      <div id="tabs-3"> 
+        <h1>Graf</h1>
+        <div id="plotdiv" style="width:600px;height:250px;"></div>
+        <h2>Receive:</h2>
+        <div id="logs2"></div>
+      </div>
+    </div>
+    
+  </body>
+</html>
