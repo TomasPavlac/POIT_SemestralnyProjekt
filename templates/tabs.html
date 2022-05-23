@@ -13,26 +13,147 @@
     $(document).ready(function() {
       namespace = '/test';
       var socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port + namespace);
-  
+      
+      var gauge = new RadialGauge({
+          renderTo: 'canvasID',
+          width: 300,
+          height: 300,
+          minValue: 0,
+          maxValue: 100,
+          minorTicks: 2,
+          strokeTicks: true,
+          colorPlate: "#fff",
+          borderShadowWidth: 0,
+          borders: false,
+          needleType: "arrow",
+          needleWidth: 2,
+          needleCircleSize: 7,
+          needleCircleOuter: true,
+          needleCircleInner: false,
+          animationDuration: 1500,
+          animationRule: "linear"
+      });
+      gauge.draw();
+      gauge.value = "0"
+      
+      var dataNames = ["Temperature","Luminosity","Humidity"];
+      var i = 0;
+      var j = 0;
+      var x = new Array();
+      var temp = new Array();
+      var lum = new Array();
+      var hum = new Array();
+      
+      
+      socket.on('my_response', function(msg) {
+          if(dataNames[i] == 'Temperature') {
+            $('#logs_temp').append('Temperature: '+msg.Temperature+'°C'+'<br>').html();
+            gauge.value = msg.Temperature;
+          } else if(dataNames[i] == 'Luminosity') {
+            $('#logs_lum').append('Luminosity: '+msg.Luminosity+' lumen'+'<br>').html();
+            gauge.value = msg.Luminosity;
+          } else {
+            $('#logs_hum').append('Humidity of Soil: '+msg.Humidity+'%'+'<br>').html();
+            gauge.value = msg.Humidity;
+          }
+      });
+      $('#gaugeBtn').click(function(event) {
+        if (i == 2){
+          i = 0
+        }else{
+          i = i + 1;
+        }
+        $(this).text(dataNames[i]);
+      });
+      
+      // Values from sensor
       socket.on('my_response', function(msg) {
         if (msg.Temperature != "Disconnected!"){
-          $('#log').append('Temperature: '+msg.Temperature+'°C'+' Luminosity: '+msg.Luminosity+'lumen'+' Humidity of Soil: '+msg.Humidity+'%'+'<br>').html();
+          $('#log').append('Temperature: '+msg.Temperature+'°C,'+' Luminosity: '+msg.Luminosity+' lumen,'+' Humidity of Soil: '+msg.Humidity+'%'+'<br>').html();
         }else{
           $('#log').append('Disconnected!')
         }  
       });
       
+      $('#chartBtn').click(function(event) {
+        if (j == 2){
+          j = 0
+        }else{
+          j = j + 1;
+        }
+        $(this).text(dataNames[j]);
+      });
+      
+      socket.on('my_response', function(msg) {
+          if(dataNames[j] == 'Temperature') {
+            temp.push(parseFloat(msg.Temperature));
+          } else if (dataNames[j] == 'Luminosity'){
+            lum.push(parseFloat(msg.Luminosity));
+          } else {
+            hum.push(parseFloat(msg.Humidity));
+          }  
+          x.push(parseFloat(msg.Count));
+          var trace_temp = {
+              x: x,
+              y: temp,
+          }; 
+          var trace_lum = {
+              x: x,
+              y: lum,
+          }; 
+          var trace_hum = {
+              x: x,
+              y: hum,
+          }; 
+          var layout_temp = {
+            title: "Temperature",
+            xaxis: {
+                title: 'Time',
+            },
+            yaxis: {
+                title: "Temperature [°C]",
+            }
+          };
+          var layout_lum = {
+            title: "Luminosity",
+            xaxis: {
+                title: 'Time',
+            },
+            yaxis: {
+                title: "Luminosity [lumnen]",
+            }
+          };
+          var layout_hum = {
+            title: "Humidity of Soil",
+            xaxis: {
+                title: 'Time',
+            },
+            yaxis: {
+                title: "Humidity of Soil [%]",
+            }
+          };
+          var traces_temp = new Array();
+          var traces_lum = new Array();
+          var traces_hum = new Array();
+          traces_temp.push(trace_temp);
+          traces_lum.push(trace_lum);
+          traces_hum.push(trace_hum);
+          Plotly.newPlot($('#plotdiv')[0], traces_temp, layout_temp);
+          Plotly.newPlot($('#plotdiv1')[0], traces_lum, layout_lum);
+          Plotly.newPlot($('#plotdiv2')[0], traces_hum, layout_hum);
+      });
+      
       $('form#emit').submit(function(event) {
           socket.emit('my_event', {
-              temp_value: $('#emit_temp').val() == undefined ? $('#emit_temp').val() = 0 : $('#emit_temp').val(),
+              temp_value: $('#emit_temp').val(),
               lum_value: $('#emit_lum').val(),
               hum_value: $('#emit_hum').val() 
           });
           return false; 
       });
       
-      $('#buttonVal').click(function(event) {
-          socket.emit('db_event', {value: $('#buttonVal').val()});
+        $('#buttonVal').click(function(event) {
+          socket.emit('btn_event', {value: $('#buttonVal').val()});
           if ($(this).val() == "start") {
             $(this).val("stop");
             $(this).text("Stop");
@@ -42,7 +163,7 @@
             $(this).text("Start");
           }
           return false; 
-        }); 
+        });
       
       $('form#disconnect').submit(function(event) {
           socket.emit('disconnect_request');
@@ -59,46 +180,62 @@
     </script>
   </head>
   <body>
-    <div id="tabs">
-      <ul>
-        <li><a href="#tabs-1">Hodnoty</a></li>
-        <li><a href="#tabs-2">Cifernik</a></li>
-        <li><a href="#tabs-3">Graf</a></li>
-      </ul>
-      
-      <div id="tabs-1">
-        <h1>Values from sensors</h1>
-        <form id="emit" method="POST" action='#'>
-          <input type="text" name="emit_temp" id="emit_temp" placeholder="Temperature [°C]">
-          <input type="text" name="emit_lum" id="emit_lum" placeholder="Luminosity [lumen]">
-          <input type="text" name="emit_hum" id="emit_hum" placeholder="Humidity of Soil [%]">
-          <input type="submit" value="Set Values">
-        </form>
-        <button id="buttonVal" type="submit" value="start">Start</button>
-        <form id="disconnect" method="POST" action="#">
-          <input type="submit" value="Disconnect">
-        </form> 
-        <h2>Receive:</h2>
-        <div id="log"></div>
-      </div>
-      
-      <div id="tabs-2">
-          <h1>Cifernik</h1>
-          <form id="disconnected" method="POST" action="#">
+      <div id="tabs">
+        <ul>
+          <li><a href="#tabs-1">Values</a></li>
+          <li><a href="#tabs-2">Gauges</a></li>
+          <li><a href="#tabs-3">Charts</a></li>
+        </ul>
+        
+        <div id="tabs-1">
+          <h1>Values from sensors</h1>
+          <form id="emit" method="POST" action='#'>
+            <input type="text" name="emit_temp" id="emit_temp" placeholder="Temperature [°C]">
+            <input type="text" name="emit_lum" id="emit_lum" placeholder="Luminosity [lumen]">
+            <input type="text" name="emit_hum" id="emit_hum" placeholder="Humidity of Soil [%]">
+            <input type="submit" value="Set Values">
+          </form>
+          <button id="buttonVal" type="submit" value="start">Start</button>
+          <form id="disconnect" method="POST" action="#">
             <input type="submit" value="Disconnect">
           </form> 
-            <canvas id="canvasID"></canvas>
-            <h2>Receive:</h2>
-          <div id="logs"></div>
+          <h2>Receive:</h2>
+          <div id="log"></div>
+        </div>
+
+        <div id="tabs-2">
+          <div style="display: flex; gap: 2em;">
+            <div>
+              <div style="display: flex;flex-direction: row; gap: 1em; margin-bottom: 1em;">
+                <h1 style="margin:0;padding-top:.2em;">Gauge:</h1>
+                <button id="gaugeBtn" value="Temperature" style="width:150px;height:50px;font-size: 1rem;">Temperature</button>
+              </div>
+              <canvas id="canvasID"></canvas>
+            </div>
+            <div style="display: flex;margin-top: 0; gap: 2em;">
+              <h1 style="margin-top: .2em;">Receive:</h1>
+              <span style="margin-top: 1.2em;"id="logs_temp"></span>
+              <span style="margin-top: 1.2em;"id="logs_lum"></span>
+              <span style="margin-top: 1.2em;"id="logs_hum"></span>
+            </div>
+          </div>
+        </div>
+        
+        <div id="tabs-3"> 
+          <div style="display: flex;flex-direction: row; gap: 2em;">
+            <div>
+              <div style="display: flex;flex-direction: row; gap: 1em; margin-bottom: 1em;">
+                  <h1 style="margin:0;padding-top:.2em;">Chart:</h1>
+                  <button id="chartBtn" value="Temperature" style="width:150px;height:50px;font-size: 1rem;">Temperature</button>
+              </div>
+              <div style="display:flex;flex-direction: row;">
+                <div id="plotdiv" style="width:500px;height:400px;"></div>
+                <div id="plotdiv1" style="width:500px;height:400px;"></div>
+                <div id="plotdiv2" style="width:500px;height:400px;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      
-      <div id="tabs-3"> 
-        <h1>Graf</h1>
-        <div id="plotdiv" style="width:600px;height:250px;"></div>
-        <h2>Receive:</h2>
-        <div id="logs2"></div>
-      </div>
-    </div>
-    
   </body>
 </html>

@@ -14,20 +14,10 @@ async_mode = None
 
 app = Flask(__name__)
 
-
-# config = ConfigParser.ConfigParser()
-# config.read('config.cfg')
-# myhost = config.get('mysqlDB', 'host')
-# myuser = config.get('mysqlDB', 'user')
-# mypasswd = config.get('mysqlDB', 'passwd')
-# mydb = config.get('mysqlDB', 'db')
-# print(myhost)
-
-
 app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app, async_mode=async_mode)
 thread = None
-thread_lock = Lock() 
+thread_lock = Lock()
 
 #Serial comunnication
 ser = serial.Serial("/dev/ttyS0")
@@ -35,8 +25,8 @@ ser = serial.Serial("/dev/ttyS0")
 ser.baudrate = 9600
     
 def background_thread(args):
-    dataList = []  
-    #db = MySQLdb.connect(host=myhost,user=myuser,passwd=mypasswd,db=mydb)          
+    dataList = []
+    count = 0           
     while True:
         read_ser = ser.readline()
         if args:
@@ -44,65 +34,32 @@ def background_thread(args):
             luminosity = dict(args).get('Luminosity')
             humidity = dict(args).get('Humidity')
             dbV = dict(args).get('db_value')
+            btnV = dict(args).get('btn_value')
         else:
             temperature = 1
             luminosity = 1
             humidity = 1
-            dbV = 'nieco' 
+            btnV = 'nieco'
+            dbV = 'nieco'
+        count += 0.5
         readSerialData = read_ser.decode()
         splitDataArr = readSerialData.split(",")
         lastElement = splitDataArr[2].replace("\r\n","")
         finalArr = np.array([splitDataArr[0],splitDataArr[1],lastElement])
         floatFinalArr = finalArr.astype(np.float)
+        t = time.asctime(time.localtime(time.time()))
         print(floatFinalArr)
-        socketio.sleep(1.5)
-#         if dbV == 'start':
-#             dataDict = {
-#             "Time": time.time(),
-#             "Temperature": splitDataArr[0],
-#             "Luminosity": splitDataArr[1],
-#             "Humidity of Soil": splitDataArr[2]
-#             }
-#             dataList.append(dataDict)
-#         else:
-#             if len(dataList)>0:
-#             print(str(dataList))
-#             fuj = str(dataList).replace("'", "\"")
-#             print(fuj)
-#             cursor = db.cursor()
-#             cursor.execute("SELECT MAX(id) FROM graph")
-#             maxid = cursor.fetchone()
-#             cursor.execute("INSERT INTO graph (id, hodnoty) VALUES (%s, %s)", (maxid[0] + 1, fuj))
-#             db.commit()
-#             dataList = []
-#             dataCounter = 0
-        if dbV == "start":
+        if btnV == "start":
             socketio.emit('my_response',
-                        {'Temperature': floatFinalArr[0],"Luminosity": floatFinalArr[1], 'Humidity': floatFinalArr[2]},
+                        {'Temperature': floatFinalArr[0],"Luminosity": floatFinalArr[1], 'Humidity': floatFinalArr[2],"Count": count},
                         namespace='/test')
-#     db.close()
+
+        socketio.sleep(1.5)
 
 @app.route('/',methods=['GET', 'POST'])
 def tabs():
     return render_template('tabs.html',async_mode=socketio.async_mode)
-#     
-# @app.route('/db')
-# def db():
-#   db = MySQLdb.connect(host=myhost,user=myuser,passwd=mypasswd,db=mydb)
-#   cursor = db.cursor()
-#   cursor.execute('''SELECT  hodnoty FROM  graph WHERE id=1''')
-#   rv = cursor.fetchall()
-#   return str(rv)    
-# 
-# @app.route('/dbdata/<string:num>', methods=['GET', 'POST'])
-# def dbdata(num):
-#   db = MySQLdb.connect(host=myhost,user=myuser,passwd=mypasswd,db=mydb)
-#   cursor = db.cursor()
-#   print(num)
-#   cursor.execute("SELECT hodnoty FROM  graph WHERE id=%s", num)
-#   rv = cursor.fetchone()
-#   return str(rv[0])
-    
+  
 @socketio.on('my_event', namespace='/test')
 def test_message(message):   
     session['Temperature'] = message['temp_value']
@@ -111,10 +68,10 @@ def test_message(message):
     print(session['Humidity'])
     emit('my_response',
          {'Temperature': session['Temperature'], 'Luminosity': session['Luminosity'],'Humidity': session['Humidity']})
-# 
-@socketio.on('db_event', namespace='/test')
-def db_message(message):   
-    session['db_value'] = message['value']    
+
+@socketio.on('btn_event', namespace='/test')
+def value_message(message):   
+    session['btn_value'] = message['value'] 
 # 
 @socketio.on('disconnect_request', namespace='/test')
 def disconnect_request():
